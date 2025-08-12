@@ -49,8 +49,8 @@ def iter_images(root: Path) -> Iterable[Path]:
 
 def make_output_path(src: Path, src_root: Path, out_root: Path) -> Path:
     rel = src.relative_to(src_root)
-    # Ersetze Endung durch .png
-    rel = rel.with_suffix(".png")
+    # Ersetze Endung durch .jpg (wird ggf. in save_web_optimized angepasst)
+    rel = rel.with_suffix(".jpg")
     return out_root / rel
 
 
@@ -63,11 +63,26 @@ def resize_image(img: Image.Image, scale: float) -> Image.Image:
     return img.resize((new_w, new_h), Resampling.LANCZOS)
 
 
-def save_png_optimized(img: Image.Image, dst: Path) -> None:
+def count_unique_colors(img: Image.Image) -> int:
+    """Zählt die einzigartigen Farben in einem Bild (Sample-basiert für Performance)"""
+    # Verkleinere für Analyse auf max 200x200 für Performance
+    w, h = img.size
+    if w > 200 or h > 200:
+        factor = min(200/w, 200/h)
+        sample_w, sample_h = int(w * factor), int(h * factor)
+        sample = img.resize((sample_w, sample_h), Resampling.NEAREST)
+    else:
+        sample = img
+    
+    return len(sample.getcolors(maxcolors=16777216) or [])
+
+
+def save_web_optimized(img: Image.Image, dst: Path) -> None:
     """
-    Speichert ein Bild als PNG möglichst klein:
-    - Opaque: quantize(256) -> 'P' -> PNG (stark kleinere Dateien)
-    - Mit Alpha: ohne Quantisierung (Erhalt der Transparenz), aber optimize + hoher Kompressionsgrad
+    Speichert ein Bild weboptimiert - JPEG für Fotos, PNG nur bei Transparenz:
+    - JPEG: Hohe Qualität ohne Farbfragmente, kleine Dateien für Fotos
+    - PNG: Nur bei Transparenz (behält Alpha-Kanal)
+    - Vollfarb ohne Quantisierungsartefakte
     """
     # Sicherstellen, dass Bild in sinnvoller Farbraumform vorliegt
     if img.mode not in ("RGB", "RGBA"):
@@ -78,16 +93,21 @@ def save_png_optimized(img: Image.Image, dst: Path) -> None:
             img = img.convert("RGB")
 
     has_alpha = (img.mode == "RGBA")
-
     dst.parent.mkdir(parents=True, exist_ok=True)
 
     if not has_alpha:
-        # Quantisierung auf 256 Farben (gut für Web-PNGs ohne Transparenz)
-        q = img.quantize(colors=256, method=Quantize.FASTOCTREE, dither=Dither.NONE)
-        q.save(dst, format="PNG", optimize=True, compress_level=9)
+        # JPEG für Fotos: Keine Farbfragmente, kleine Dateien, hohe Qualität
+        # Ändere Dateiendung zu .jpg
+        dst_jpg = dst.with_suffix('.jpg')
+        # Konvertiere zu RGB für JPEG (falls noch nicht geschehen)
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.save(dst_jpg, format="JPEG", quality=90, optimize=True)
+        return dst_jpg
     else:
-        # Transparenz behalten – Quantisierung kann unschöne Kanten erzeugen
+        # Transparenz: PNG ohne Quantisierung
         img.save(dst, format="PNG", optimize=True, compress_level=9)
+        return dst
 
 
 def process_one(src: Path, dst: Path, scale: float, force: bool,
@@ -110,8 +130,8 @@ def process_one(src: Path, dst: Path, scale: float, force: bool,
                 return f"SKIP (würde nicht verkleinern, nutze --force zum Erzwingen): {src}"
 
             im_resized = resize_image(im, scale)
-            save_png_optimized(im_resized, dst)
-            return f"OK   {src} -> {dst} ({orig_size[0]}x{orig_size[1]} -> {im_resized.size[0]}x{im_resized.size[1]})"
+            actual_dst = save_web_optimized(im_resized, dst)
+            return f"OK   {src} -> {actual_dst} ({orig_size[0]}x{orig_size[1]} -> {im_resized.size[0]}x{im_resized.size[1]})"
     except Exception as e:
         return f"ERR  {src}: {e}"
 
