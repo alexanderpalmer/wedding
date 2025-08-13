@@ -1,0 +1,51 @@
+# Virtuelle Umgebungen
+.venv/
+venv/
+env/
+ENV/
+
+# Python-Bytecode und Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit-Test / Coverage Reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# IDE / Editor Dateien
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS-spezifische Dateien
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints
+
+# Lokale Entwicklungsdateien
+*.env
+*.local
